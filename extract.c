@@ -11,7 +11,40 @@ typedef struct
 } snd;
 
 
-int extract_files(snd *s)
+/* Allocates memory for the pointers in the SND struct then reads the file pointed to by struct snd->fp. 
+ * The first 4 bytes contains the number of files stored in the file. Next follows repeatedly number of files time,
+ * 8 bytes or less for the .wav file name, 32 padding bytes, 4 bytes giving an offset 
+ * telling where the .wav file start, and 4 bytes telling the size of the .wav file.
+ */
+static int read_file_info(snd *s)
+{
+  int temp[8];
+  int start;
+  fread(&s->num_files,sizeof(int),1,s->fp);
+  s->filenames = malloc(s->num_files*sizeof(char*)); // allocate array of pointers that point to strings
+  s->names = malloc(9*s->num_files*sizeof(char)); // allocate memory for #num_files strings of size 9, maximum name length plus one zero byte, this allocates all memory in a row
+  s->sizes = malloc(s->num_files*sizeof(int)); // allocate memory for storing filesizes
+  int i;
+  /* Read filenames and file sizes */ 
+  for (i = 0; i < s->num_files; i++) {
+    s->filenames[i] = &(s->names[i*9]);
+    fread(s->filenames[i],sizeof(char),8,s->fp);
+    s->filenames[i][8] = 0; // remember to set the last bit of a string to zero
+    fread(temp,sizeof(int),8,s->fp);
+    fread(&start,sizeof(int),1,s->fp);
+    fread(&s->sizes[i],sizeof(int),1,s->fp);
+    //printf("%s\n",s->filenames[i]); //print file list
+  }
+  return 0;
+}
+
+/* Reads the files in the file pointed to by snd->fp.
+ * By this point all the header data of the .snd should be read by read_file_info
+ * Therefore if we start reading files of the sizes given by snd->sizes and write the files
+ * to disk, all the files contrained in the .snd will be extracted.
+ * It will cause undefined behaviour if called before read_file_info().
+ */
+static int extract_files(snd *s)
 {
   char *file;
   FILE *out;
@@ -26,44 +59,35 @@ int extract_files(snd *s)
     free(file);
     fclose(out);
   }
+  return 0;
 }
 
+static int free_struct(snd *s)
+{
+  free(s->sizes);
+  free(s->names);
+  free(s->filenames);
+  return 0;
+}
 
 int main(int argc, char *argv[])
 {
 
-  snd *s;
-  s->fp = fopen(argv[1], "rb");
-  printf("rw\n");
-  int num_files;
-  char *name;
-  int temp[8];
-  int start;
-  int end;
-  char padding[32];
-  
-  fread(&s->num_files,sizeof(int),1,s->fp);
-  s->filenames = malloc(s->num_files*sizeof(char*)); // allocate array of pointers that point to strings
-  s->names = malloc(9*s->num_files*sizeof(char)); // allocate memory for #num_files strings of size 9, maximum name length plus one zero byte, this allocates all memory in a row
-  s->sizes = malloc(s->num_files*sizeof(int)); // allocate memory for storing filesizes
-  int i;
-  /* Read filenames and file sizes */ 
-  for (i = 0; i < s->num_files; i++) {
-    s->filenames[i] = &(s->names[i*9]);
-    fread(s->filenames[i],sizeof(char),8,s->fp);
-    s->filenames[i][8] = 0; // remember to set the last bit of a string to zero
-    fread(temp,sizeof(int),8,s->fp);
-    fread(&start,sizeof(int),1,s->fp);
-    fread(&s->sizes[i],sizeof(int),1,s->fp);
-    printf("%s\n",s->filenames[i]);
+  if (argc < 2) {
+    fprintf(stderr,"Usage: extract Heroes3.snd \n");
+    exit(1);
   }
 
-  extract_files(s);
-  
-  free(s->sizes);
-  free(s->names);
-  free(s->filenames);
-  fclose(s->fp);
+  snd s;
+  s.fp = fopen(argv[1], "rb");
+    
+  read_file_info(&s);
+
+  extract_files(&s);
+ 
+  free_struct(&s); 
+
+  fclose(s.fp);
 
   return 0;
 }
