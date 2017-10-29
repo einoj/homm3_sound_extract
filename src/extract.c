@@ -22,6 +22,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 typedef struct
 {
@@ -72,10 +73,14 @@ static int extract_files(snd *s)
   FILE *out;
   char tmp_n[13]; //13 because we need to add .wav to the end of filenames and the largest file name is 11
   int i;
+  struct stat st = {0};
+  if (stat("./snd", &st) == -1) {
+      mkdir("./snd", 0755);
+  }
   for (i = 0; i < s->num_files; i++) {
     file = malloc(s->sizes[i]*sizeof(char));
     fread(file,sizeof(char),s->sizes[i],s->fp);
-    sprintf(tmp_n,"%s.wav",s->filenames[i]);
+    sprintf(tmp_n,"snd/%s.wav",s->filenames[i]);
     out = fopen(tmp_n,"wb");
     fwrite(file,sizeof(char),s->sizes[i],out);
     free(file);
